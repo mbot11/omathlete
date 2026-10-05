@@ -20,10 +20,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install test dependencies
-        run: sudo apt-get update && sudo apt-get install --yes jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes jq nodejs python3 qt6-declarative-dev-tools \
+            qml6-module-qtquick qml6-module-qtquick-window \
+            qml6-module-qtqml-workerscript qml6-module-qttest
 
       - name: Check shell syntax
-        run: bash -n bin/omathlete tests/fixture-curl tests/provider-fixtures.sh tests/smoke.sh
+        run: bash -n bin/omathlete bin/provider.sh bin/planner.sh tests/fixture-curl tests/provider-fixtures.sh tests/reliability.sh tests/smoke.sh tests/check.sh
+
+      - name: Check descriptor-rooted storage and hostile filesystem paths
+        run: python3 -I tests/storage.py
 
       - name: Check manifest contract
         run: |
@@ -40,3 +47,23 @@ jobs:
 
       - name: Run deterministic provider tests
         run: tests/provider-fixtures.sh
+
+      - name: Check provider failure recovery and preference concurrency
+        run: bash tests/reliability.sh
+
+      - name: Check panel refresh and interaction behavior
+        run: node tests/panel-logic.mjs
+
+      - name: Check incremental loading and bounded concurrency
+        run: node tests/loading.mjs
+
+      - name: Check virtualized slate rendering
+        run: node tests/slate-view.mjs
+
+      - name: Check compact and vertical bar geometry
+        run: node tests/bar-view.mjs
+
+      - name: Check agenda, watch later, and reminders
+        run: |
+          node tests/planner.mjs
+          node tests/planner-view.mjs

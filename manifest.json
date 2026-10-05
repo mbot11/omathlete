@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.chrisroundhill.omathlete",
   "name": "Omathlete",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "author": "Chris Roundhill",
   "license": "MIT",
   "description": "Upcoming games, live scores, and broadcast details for your favorite teams.",

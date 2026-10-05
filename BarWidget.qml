@@ -46,8 +46,9 @@ BarWidget {
     bar: root.bar
     labelVisible: false
     hasVisualContent: true
-    active: panelLoader.item ? panelLoader.item.barLive : false
-    fixedWidth: root.vertical ? -1 : (stateLabel.text ? Style.space(158) : Style.bar.iconSlot)
+    active: panelLoader.item ? panelLoader.item.barLive && !panelLoader.item.barDataStale : false
+    fixedWidth: root.vertical ? -1 : (stateLabel.text
+      ? barContent.implicitWidth + button.scaledHorizontalMargin * 2 : Style.bar.iconSlot)
     fixedHeight: root.vertical ? Style.bar.iconSlot : -1
     tooltipText: panelLoader.item ? panelLoader.item.tooltipText : "Omathlete"
 
@@ -65,6 +66,17 @@ BarWidget {
         readonly property color ink: button.active && button.useActiveColor
           ? button.activeColor : button.foreground
 
+        Text {
+          anchors.centerIn: parent
+          visible: !!panelLoader.item && panelLoader.item.barDataStale
+          text: "!"
+          color: mark.ink
+          font.family: button.fontFamily
+          font.pixelSize: button.fontSize
+          font.bold: true
+          z: 1
+        }
+
         Rectangle {
           anchors.fill: parent
           radius: Style.space(2)
@@ -74,6 +86,7 @@ BarWidget {
         }
         Rectangle {
           anchors.horizontalCenter: parent.horizontalCenter
+          visible: !panelLoader.item || !panelLoader.item.barDataStale
           y: Style.space(3)
           width: 1
           height: parent.height - Style.space(6)
@@ -81,6 +94,7 @@ BarWidget {
         }
         Rectangle {
           x: Style.space(4)
+          visible: !panelLoader.item || !panelLoader.item.barDataStale
           y: Style.space(5)
           width: Style.space(3)
           height: Style.space(3)
@@ -89,6 +103,7 @@ BarWidget {
         }
         Rectangle {
           anchors.right: parent.right
+          visible: !panelLoader.item || !panelLoader.item.barDataStale
           anchors.rightMargin: Style.space(4)
           y: Style.space(5)
           width: Style.space(3)
@@ -101,7 +116,7 @@ BarWidget {
       Text {
         id: stateLabel
         visible: !root.vertical && text !== ""
-        width: visible ? Style.space(126) : 0
+        width: visible ? Math.min(implicitWidth, Style.space(126)) : 0
         anchors.verticalCenter: parent.verticalCenter
         text: panelLoader.item ? panelLoader.item.barLabel : ""
         color: button.active && button.useActiveColor ? button.activeColor : button.foreground

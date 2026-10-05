@@ -6,6 +6,11 @@ url="${!#}"
 
 [[ " $* " == *" --compressed "* && " $* " == *" --max-time "* ]] || exit 22
 [[ ${OMATHLETE_FIXTURE_FAILURE:-0} != 1 ]] || exit 22
+if [[ -n ${OMATHLETE_FIXTURE_SCOREBOARD_DAY:-} && $url == *'/scoreboard'* && $url != *"dates=$OMATHLETE_FIXTURE_SCOREBOARD_DAY"* ]]; then
+  printf '%s\n' '{"events":[]}'
+  exit 0
+fi
+if [[ ${OMATHLETE_FIXTURE_SCOREBOARD_FAILURE:-0} == 1 && $url == *'/scoreboard'* ]]; then exit 22; fi
 [[ ${OMATHLETE_FIXTURE_MALFORMED:-0} != 1 ]] || { printf '{not-json'; exit 0; }
 
 # The test double writes what curl would expose after --compressed decoding.
@@ -29,6 +34,24 @@ case "$url" in
   *) exit 22 ;;
 esac
 
+if [[ -n ${OMATHLETE_FIXTURE_JOURNAL:-} ]]; then
+  printf '%s\tstart\t%s\n' "$$" "$sport" >>"$OMATHLETE_FIXTURE_JOURNAL"
+  trap 'printf "%s\tend\t%s\n" "$$" "$sport" >>"$OMATHLETE_FIXTURE_JOURNAL"' EXIT
+fi
+if [[ ${OMATHLETE_FIXTURE_DELAY_SPORT:-} == all || ${OMATHLETE_FIXTURE_DELAY_SPORT:-} == "$sport" ]]; then
+  sleep "${OMATHLETE_FIXTURE_DELAY_SECONDS:-1}"
+fi
+
+[[ ${OMATHLETE_FIXTURE_FAIL_SPORT:-} != "$sport" ]] || exit 22
+if [[ ${OMATHLETE_FIXTURE_BAD_SHAPE:-0} == 1 ]]; then
+  printf '%s\n' '{"events":"unexpected-provider-shape"}'
+  exit 0
+fi
+if [[ ${OMATHLETE_FIXTURE_BAD_EVENT:-0} == 1 ]]; then
+  printf '%s\n' '{"events":[{"date":{},"competitions":false}]}'
+  exit 0
+fi
+
 team=$(jq -ce --arg sport "$sport" '.[] | select(.sport == $sport)' \
   "$fixture_dir/provider-teams.json")
 
@@ -37,7 +60,7 @@ if [[ $url == *'/teams?limit=1000' ]]; then
     (if (env.OMATHLETE_FIXTURE_MANY_CATALOG // "0") == "1" then 1200 else 1 end) as $count
     | {sports:[{leagues:[{teams:[range(0; $count) as $index | {team:{
         id:(($index + 1) | tostring),
-        displayName:("Team " + ($index | tostring)),
+        displayName:((env.OMATHLETE_FIXTURE_CATALOG_PREFIX // "Team") + " " + ($index | tostring)),
         abbreviation:("T" + ($index | tostring))
       }}]}]}]}'
   exit 0
@@ -82,11 +105,32 @@ jq -cn --argjson team "$team" --arg url "$url" '
       }
     ]
   }
+  | .events[].competitions[0].venue = {fullName:"Fixture Stadium"}
+  | .events[].competitions[0].competitors[].records = [{type:"total",summary:"10-5"}]
   | if ($team.sport == "epl" or $team.sport == "mls")
       and (env.OMATHLETE_FIXTURE_SOCCER_PAST_ONLY // "0") == "1"
       and ($url | contains("/teams/"))
     then .events |= map(select(.competitions[0].status.type.state == "post"))
     else . end
+  | if (env.OMATHLETE_FIXTURE_CURRENT_DATES // "0") == "1" then
+      .events[0].date = ((now - 3600) | strftime("%Y-%m-%dT%H:%M:%SZ"))
+      | .events[1].date = ((now + 3600) | strftime("%Y-%m-%dT%H:%M:%SZ"))
+    else . end
+  | if (env.OMATHLETE_FIXTURE_EMPTY_EVENTS // "0") == "1" then .events = [] else . end
+  | if env.OMATHLETE_FIXTURE_GAME_AGE != null then
+      .events[0].date = ((now - (env.OMATHLETE_FIXTURE_GAME_AGE | tonumber)) | strftime("%Y-%m-%dT%H:%M:%SZ")) else . end
+  | if env.OMATHLETE_FIXTURE_GAME_ID != null then .events[0].id = env.OMATHLETE_FIXTURE_GAME_ID else . end
+  | if env.OMATHLETE_FIXTURE_SCHEDULE_STATE != null and ($url | contains("/teams/")) then
+      .events[0].competitions[0].status.type.state = env.OMATHLETE_FIXTURE_SCHEDULE_STATE else . end
+  | if env.OMATHLETE_FIXTURE_BOARD_STATE != null and ($url | contains("/scoreboard")) then
+      .events[0].competitions[0].status.type.state = env.OMATHLETE_FIXTURE_BOARD_STATE else . end
+  | if env.OMATHLETE_FIXTURE_STATUS_NAME != null then
+      .events[0].competitions[0].status.type.name = env.OMATHLETE_FIXTURE_STATUS_NAME
+      | .events[0].competitions[0].status.type.shortDetail = env.OMATHLETE_FIXTURE_STATUS_NAME else . end
+  | if env.OMATHLETE_FIXTURE_STATUS_DETAIL != null then
+      .events[0].competitions[0].status.type.shortDetail = env.OMATHLETE_FIXTURE_STATUS_DETAIL else . end
+  | if (env.OMATHLETE_FIXTURE_MISSING_LIVE_SCORES // "0") == "1" and ($url | contains("/teams/"))
+    then .events[0].competitions[0].competitors |= map(del(.score)) else . end
   | if ($url | contains("/scoreboard"))
     then .events[].competitions[0].competitors[].score |= .displayValue
     else . end
